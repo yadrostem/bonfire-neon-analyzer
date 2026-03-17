@@ -2,6 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
 const path = require('path');
+const { execSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 
 const app = express();
 const upload = multer({
@@ -111,4 +114,55 @@ app.get('/health', (req, res) => res.json({ status: 'ok', service: 'bonfire-neon
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Bonfire Neon Analyzer draait op poort ${PORT}`);
+});
+
+// Quote PDF generator endpoint
+app.post('/api/quote', upload.fields([
+  { name: 'mockup1', maxCount: 1 },
+  { name: 'mockup2', maxCount: 1 }
+]), async (req, res) => {
+  const tmpFiles = [];
+  try {
+    const body = req.body;
+    const files = req.files || {};
+
+    let mockup1Path = null;
+    let mockup2Path = null;
+
+    if (files.mockup1 && files.mockup1[0]) {
+      mockup1Path = require('path').join(require('os').tmpdir(), `bfc_m1_${Date.now()}.jpg`);
+      require('fs').writeFileSync(mockup1Path, files.mockup1[0].buffer);
+      tmpFiles.push(mockup1Path);
+    }
+    if (files.mockup2 && files.mockup2[0]) {
+      mockup2Path = require('path').join(require('os').tmpdir(), `bfc_m2_${Date.now()}.jpg`);
+      require('fs').writeFileSync(mockup2Path, files.mockup2[0].buffer);
+      tmpFiles.push(mockup2Path);
+    }
+
+    const data = { ...body, mockup1: mockup1Path, mockup2: mockup2Path };
+    const dataPath = require('path').join(require('os').tmpdir(), `bfc_data_${Date.now()}.json`);
+    const outPath = require('path').join(require('os').tmpdir(), `bfc_quote_${Date.now()}.pdf`);
+    require('fs').writeFileSync(dataPath, JSON.stringify(data));
+    tmpFiles.push(dataPath, outPath);
+
+    require('child_process').execSync(
+      `python3 "${require('path').join(__dirname, 'generate_pdf.py')}" "${dataPath}" "${outPath}"`,
+      { timeout: 30000 }
+    );
+
+    if (!require('fs').existsSync(outPath)) throw new Error('PDF niet aangemaakt');
+
+    const pdfBuf = require('fs').readFileSync(outPath);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="BFC_Offerte.pdf"');
+    res.setHeader('X-Quote-Number', data.quote_number || 'BF001');
+    res.send(pdfBuf);
+
+  } catch (err) {
+    console.error('Quote PDF error:', err.message);
+    res.status(500).json({ error: err.message });
+  } finally {
+    tmpFiles.forEach(f => { try { require('fs').unlinkSync(f); } catch {} });
+  }
 });

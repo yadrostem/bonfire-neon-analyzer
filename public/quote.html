@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bonfire Club — Offerte Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080808; --surface: #111; --surface2: #1a1a1a;
+      --border: #222; --border2: #333;
+      --text: #f0f0f0; --muted: #666; --dim: #333;
+      --accent: #39FF14; --accent-dim: rgba(57,255,20,0.08);
+      --warn: #ffaa00;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'SF Mono', 'Fira Code', monospace; min-height: 100vh; }
+
+    header { border-bottom: 1px solid var(--border); padding: 18px 40px; display: flex; align-items: center; gap: 14px; }
+    .logo { font-size: 14px; font-weight: bold; letter-spacing: 3px; }
+    .logo span { color: var(--accent); }
+    .badge { font-size: 9px; letter-spacing: 2px; color: var(--muted); border: 1px solid var(--border2); padding: 3px 8px; border-radius: 2px; }
+
+    main { max-width: 960px; margin: 0 auto; padding: 40px; display: grid; grid-template-columns: minmax(0,1fr) 280px; gap: 32px; }
+
+    h2 { font-size: 11px; letter-spacing: 3px; color: var(--accent); margin-bottom: 16px; font-weight: normal; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+    .section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 16px; }
+
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+    .field-grid.full { grid-template-columns: 1fr; }
+
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 9px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+    .field input, .field select, .field textarea {
+      background: var(--surface2); border: 1px solid var(--border2);
+      color: var(--text); padding: 8px 10px; border-radius: 3px;
+      font-family: inherit; font-size: 12px;
+      transition: border-color 0.2s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .field select option { background: var(--surface2); }
+    .field textarea { resize: vertical; min-height: 60px; }
+
+    /* Upload zones */
+    .upload-zone {
+      border: 1px dashed var(--border2); border-radius: 4px;
+      padding: 20px; text-align: center; cursor: pointer;
+      transition: all 0.2s; background: var(--surface2);
+      min-height: 90px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 6px;
+    }
+    .upload-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .upload-zone p { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+    .upload-zone .label { font-size: 11px; color: var(--text); }
+    .upload-preview { width: 100%; max-height: 120px; object-fit: contain; border-radius: 3px; display: none; }
+
+    /* Sidebar */
+    .sidebar { position: sticky; top: 20px; height: fit-content; }
+
+    .preview-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin-bottom: 12px; }
+    .preview-card h3 { font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 12px; font-weight: normal; }
+
+    .preview-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--border); }
+    .preview-row:last-child { border-bottom: none; }
+    .preview-row span:first-child { font-size: 10px; color: var(--muted); }
+    .preview-row span:last-child { font-size: 11px; color: var(--text); text-align: right; max-width: 140px; word-break: break-word; }
+
+    .price-display { text-align: center; padding: 16px; background: var(--surface2); border-radius: 4px; margin: 12px 0; }
+    .price-display .amount { font-size: 28px; font-weight: bold; color: var(--accent); }
+    .price-display .label { font-size: 9px; color: var(--muted); letter-spacing: 2px; margin-top: 4px; }
+
+    .generate-btn {
+      width: 100%; padding: 14px; background: var(--accent);
+      color: #000; border: none; border-radius: 4px;
+      font-family: inherit; font-size: 12px; font-weight: bold;
+      letter-spacing: 2px; cursor: pointer; transition: opacity 0.2s;
+    }
+    .generate-btn:hover { opacity: 0.85; }
+    .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .status { font-size: 10px; text-align: center; color: var(--muted); margin-top: 8px; min-height: 16px; }
+    .status.loading { color: var(--accent); }
+    .status.error { color: #ff4444; }
+
+    .spinner-inline {
+      display: inline-block; width: 10px; height: 10px;
+      border: 1.5px solid var(--border2); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Checkbox addon */
+    .addon-list { display: flex; flex-direction: column; gap: 6px; }
+    .addon-item { display: flex; align-items: center; gap: 8px; font-size: 11px; cursor: pointer; }
+    .addon-item input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+    .addon-price { color: var(--muted); font-size: 10px; }
+
+    @media(max-width: 760px) {
+      main { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">BONFIRE<span>CLUB</span></div>
+  <div class="badge">OFFERTE GENERATOR</div>
+</header>
+
+<main>
+<div class="form-col">
+
+  <!-- Klantgegevens -->
+  <div class="section">
+    <h2>Klantgegevens</h2>
+    <div class="field-grid">
+      <div class="field">
+        <label>Naam</label>
+        <input type="text" id="client_name" placeholder="Kim Schagen" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="client_email" placeholder="kim@voorbeeld.be" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Telefoon</label>
+        <input type="text" id="client_phone" placeholder="+32 ..." oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Bedrijf (optioneel)</label>
+        <input type="text" id="client_company" placeholder="Bedrijfsnaam" oninput="updatePreview()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Design specs -->
+  <div class="section">
+    <h2>Design Specs</h2>
+    <div class="field-grid">
+      <div class="field">
+        <label>Productnaam / Tekst</label>
+        <input type="text" id="product_name" placeholder="DYMAC" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Technologie</label>
+        <select id="technology" onchange="updatePreview()">
+          <option>LED Neon Flex</option>
+          <option>Essential Neon</option>
+          <option>RGB LED Neon</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-grid three" style="margin-top:12px">
+      <div class="field">
+        <label>Breedte (cm)</label>
+        <input type="number" id="width" placeholder="86" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Hoogte (cm)</label>
+        <input type="number" id="height" placeholder="21" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Gebruik</label>
+        <select id="usage" onchange="updatePreview()">
+          <option>Indoor</option>
+          <option>Outdoor</option>
+          <option>Indoor / Outdoor</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-grid" style="margin-top:12px">
+      <div class="field">
+        <label>LED Kleur</label>
+        <select id="neon_color" onchange="updatePreview()">
+          <option>Warm White</option>
+          <option>Ice Blue</option>
+          <option>Red / Rood</option>
+          <option>Lemon Yellow</option>
+          <option>Orange / Oranje</option>
+          <option>Green / Groen</option>
+          <option>Blue / Blauw</option>
+          <option>Hot Pink</option>
+          <option>Girl Pink</option>
+          <option>Purple / Paars</option>
+          <option>Blue Green</option>
+          <option>RGB (kleurveranderend)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Jacket Kleur</label>
+        <select id="jacket_type" onchange="updatePreview()">
+          <option>White</option>
+          <option>Black</option>
+          <option>Transparent</option>
+          <option>Matching kleur</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-grid" style="margin-top:12px">
+      <div class="field">
+        <label>Installatie</label>
+        <select id="installation" onchange="updatePreview()">
+          <option>Gemonteerd (schroeven)</option>
+          <option>Hangend (ketting)</option>
+          <option>3M strips</option>
+          <option>Op maat</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Levertijd</label>
+        <select id="delivery_time" onchange="updatePreview()">
+          <option>2-4 weken</option>
+          <option>1-2 weken (express)</option>
+          <option>4-6 weken</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backing -->
+  <div class="section">
+    <h2>Backing Info</h2>
+    <div class="field-grid">
+      <div class="field">
+        <label>Backing Type</label>
+        <select id="backing" onchange="updatePreview()">
+          <option>Cut-to-shape transparant</option>
+          <option>Cut-to-shape zwart acryl</option>
+          <option>Cut-to-shape wit acryl</option>
+          <option>Rechthoekig transparant</option>
+          <option>Rechthoekig zwart acryl</option>
+          <option>Rechthoekig wit acryl</option>
+          <option>Cut-to-letter</option>
+          <option>Geen backing</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Backing Kleur</label>
+        <select id="backing_color" onchange="updatePreview()">
+          <option>Transparant</option>
+          <option>Zwart</option>
+          <option>Wit</option>
+        </select>
+      </div>
+    </div>
+    <div class="field field-grid full" style="margin-top:12px">
+      <div class="field">
+        <label>Omschrijving backing</label>
+        <input type="text" id="backing_description" placeholder="Uitgesneden op vorm van het teken, 1cm extra rondom" oninput="updatePreview()">
+      </div>
+    </div>
+    <div style="margin-top:12px; display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="uv_print" style="accent-color: var(--accent); width:14px; height:14px;">
+      <label for="uv_print" style="font-size:11px; cursor:pointer;">UV-print op backing (logo/afbeelding geprint)</label>
+    </div>
+  </div>
+
+  <!-- Mockups -->
+  <div class="section">
+    <h2>Mockup Afbeeldingen</h2>
+    <div class="field-grid">
+      <div class="field">
+        <label>Mockup 1 — Witte achtergrond met afmetingen</label>
+        <div class="upload-zone" onclick="document.getElementById('mockup1_file').click()">
+          <img class="upload-preview" id="mockup1_preview">
+          <span class="label" id="mockup1_label">Klik om te uploaden</span>
+          <p>PNG · JPG · WEBP</p>
+        </div>
+        <input type="file" id="mockup1_file" accept="image/*" style="display:none" onchange="previewUpload('mockup1')">
+      </div>
+      <div class="field">
+        <label>Mockup 2 — Roomscene render</label>
+        <div class="upload-zone" onclick="document.getElementById('mockup2_file').click()">
+          <img class="upload-preview" id="mockup2_preview">
+          <span class="label" id="mockup2_label">Klik om te uploaden</span>
+          <p>PNG · JPG · WEBP</p>
+        </div>
+        <input type="file" id="mockup2_file" accept="image/*" style="display:none" onchange="previewUpload('mockup2')">
+      </div>
+    </div>
+  </div>
+
+  <!-- Prijs -->
+  <div class="section">
+    <h2>Prijs</h2>
+    <div class="field-grid three">
+      <div class="field">
+        <label>Basisprijs (€)</label>
+        <input type="number" id="price" placeholder="349" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>Korting (€)</label>
+        <input type="number" id="discount" placeholder="0" oninput="updatePreview()">
+      </div>
+      <div class="field">
+        <label>BTW</label>
+        <select id="vat" onchange="updatePreview()">
+          <option value="0">Excl. BTW</option>
+          <option value="21">Incl. 21% BTW</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top: 14px;">
+      <label style="font-size:9px; letter-spacing:2px; color:var(--muted); display:block; margin-bottom:8px;">ADD-ONS TOEVOEGEN</label>
+      <div class="addon-list">
+        <label class="addon-item">
+          <input type="checkbox" value="90" onchange="updatePreview()"> Expreslevering (5-7 dagen) <span class="addon-price">+€90</span>
+        </label>
+        <label class="addon-item">
+          <input type="checkbox" value="30" onchange="updatePreview()"> Dimmer afstandsbediening <span class="addon-price">+€30</span>
+        </label>
+        <label class="addon-item">
+          <input type="checkbox" value="10" onchange="updatePreview()"> 3M strips <span class="addon-price">+€10</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /form-col -->
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="preview-card">
+    <h3>OVERZICHT</h3>
+    <div class="preview-row"><span>Klant</span><span id="pv_name">—</span></div>
+    <div class="preview-row"><span>Product</span><span id="pv_product">—</span></div>
+    <div class="preview-row"><span>Afmeting</span><span id="pv_size">—</span></div>
+    <div class="preview-row"><span>Kleur</span><span id="pv_color">—</span></div>
+    <div class="preview-row"><span>Backing</span><span id="pv_backing">—</span></div>
+    <div class="preview-row"><span>UV-print</span><span id="pv_uv">Nee</span></div>
+    <div class="preview-row"><span>Levering</span><span id="pv_delivery">—</span></div>
+  </div>
+
+  <div class="price-display">
+    <div class="amount" id="pv_price">€—</div>
+    <div class="label">TOTAAL EXCL. BTW</div>
+  </div>
+
+  <button class="generate-btn" id="generateBtn" onclick="generatePDF()">
+    PDF GENEREREN
+  </button>
+  <div class="status" id="status"></div>
+
+  <div style="margin-top: 16px; font-size: 9px; color: var(--dim); line-height: 1.7; letter-spacing: 0.5px;">
+    Genereert 3 pagina's:<br>
+    1. Cover met hero afbeelding<br>
+    2. Mockup + product specs<br>
+    3. Offerte + betaalinfo
+  </div>
+</div>
+
+</main>
+
+<script>
+function updatePreview() {
+  const g = id => document.getElementById(id)?.value || '';
+  g('pv_name') && (document.getElementById('pv_name').textContent = g('client_name') || '—');
+  document.getElementById('pv_product').textContent = g('product_name') || '—';
+  const w = g('width'), h = g('height');
+  document.getElementById('pv_size').textContent = (w && h) ? `${w} × ${h} cm` : (w ? `${w} cm breed` : '—');
+  document.getElementById('pv_color').textContent = g('neon_color') || '—';
+  document.getElementById('pv_backing').textContent = g('backing') || '—';
+  document.getElementById('pv_uv').textContent = document.getElementById('uv_print')?.checked ? 'Ja' : 'Nee';
+  document.getElementById('pv_delivery').textContent = g('delivery_time') || '—';
+
+  // Price calc
+  let base = parseFloat(g('price')) || 0;
+  let disc = parseFloat(g('discount')) || 0;
+  const addons = [...document.querySelectorAll('.addon-item input[type=checkbox]:checked')]
+    .reduce((s, el) => s + parseFloat(el.value || 0), 0);
+  const vat = parseFloat(document.getElementById('vat')?.value || 0);
+  let total = base - disc + addons;
+  if (vat > 0) total = total * (1 + vat/100);
+  document.getElementById('pv_price').textContent = base > 0 ? `€${Math.round(total)}` : '€—';
+}
+
+function previewUpload(id) {
+  const file = document.getElementById(id + '_file').files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const preview = document.getElementById(id + '_preview');
+  const label = document.getElementById(id + '_label');
+  preview.src = url;
+  preview.style.display = 'block';
+  label.style.display = 'none';
+}
+
+async function generatePDF() {
+  const btn = document.getElementById('generateBtn');
+  const status = document.getElementById('status');
+
+  const formData = new FormData();
+  const fields = ['client_name','client_email','client_phone','client_company',
+    'product_name','technology','width','height','usage','neon_color','jacket_type',
+    'installation','delivery_time','backing','backing_color','backing_description','price'];
+
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    if (el) formData.append(f, el.value || '');
+  });
+
+  formData.append('uv_print', document.getElementById('uv_print')?.checked ? '1' : '0');
+
+  const addons = [...document.querySelectorAll('.addon-item input[type=checkbox]:checked')]
+    .map(el => el.parentElement.textContent.trim().split('+')[0].trim());
+  formData.append('addons', addons.join(', '));
+
+  // Discount
+  formData.append('discount', document.getElementById('discount')?.value || '0');
+  formData.append('vat', document.getElementById('vat')?.value || '0');
+
+  // Mockup files
+  const m1 = document.getElementById('mockup1_file').files[0];
+  const m2 = document.getElementById('mockup2_file').files[0];
+  if (m1) formData.append('mockup1', m1);
+  if (m2) formData.append('mockup2', m2);
+
+  btn.disabled = true;
+  status.className = 'status loading';
+  status.innerHTML = '<span class="spinner-inline"></span>PDF genereren...';
+
+  try {
+    const resp = await fetch('/api/quote', { method: 'POST', body: formData });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Server fout');
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const quoteNum = resp.headers.get('X-Quote-Number') || 'offerte';
+    a.href = url;
+    a.download = `BFC_Offerte_${quoteNum}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+    status.className = 'status';
+    status.style.color = 'var(--accent)';
+    status.textContent = `PDF gedownload: BFC_Offerte_${quoteNum}.pdf`;
+  } catch (err) {
+    status.className = 'status error';
+    status.textContent = 'Fout: ' + err.message;
+  }
+  btn.disabled = false;
+}
+
+updatePreview();
+</script>
+</body>
+</html>
