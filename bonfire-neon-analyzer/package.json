@@ -1,0 +1,18 @@
+{
+  "name": "bonfire-neon-analyzer",
+  "version": "1.0.0",
+  "description": "Bonfire Club — Neon Feasibility Analyzer",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "@anthropic-ai/sdk": "^0.20.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
